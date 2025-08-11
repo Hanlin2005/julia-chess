@@ -42,7 +42,7 @@ function launch_search(bd::Board)
     last_board[] = bd
     thinking[]   = true
     search_task[] = @async begin
-        mv = tostring(mcts(bd, 10000))
+        mv = tostring(mcts(bd, 5000, max_children = 1000))
         println("bestmove $mv")
         flush(stdout)
         thinking[] = false

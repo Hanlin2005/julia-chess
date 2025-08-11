@@ -36,16 +36,20 @@ function rollout(currentNode::Node)
     #Simulate random games until end
     nodeColor = sidetomove(currentNode.position)
     position = currentNode.position
+    movecount = 0
 
     while !isterminal(position)
         legalmoves = moves(position)
         position = domove(position, rand(legalmoves))
+        movecount += 5
     end
     
-    if ischeckmate(position) && sidetomove(position) == coloropp(nodeColor)
-        back_propagate(currentNode, 1)
-    elseif ischeckmate(position) && sidetomove(position) != coloropp(nodeColor)
-        back_propagate(currentNode, -1)
+    if ischeckmate(position) && sidetomove(position) == nodeColor && movecount == 0
+        back_propagate(currentNode, 1000)
+    elseif ischeckmate(position) && sidetomove(position) == nodeColor
+        back_propagate(currentNode, 100 - movecount)
+    elseif ischeckmate(position) && sidetomove(position) != nodeColor
+        back_propagate(currentNode, -100 - movecount)
     else
         back_propagate(currentNode, 0)
     end
@@ -94,6 +98,11 @@ function mcts(initial_position::Board, simulations::Int; max_children::Int = 10,
     #make sure root node has children
     root = create_node(initial_position)
     add_children(root, max_children)
+    #if isempty(root.children[1].children)
+       # print(lastmove(root.children[1].position))
+       # print(isterminal(root.children[1].position))
+       # print(sidetomove(root.children[1].position))
+    #end
 
     #start iterations
     for _ in 1:simulations
@@ -119,5 +128,6 @@ function mcts(initial_position::Board, simulations::Int; max_children::Int = 10,
 
     end
 
+    #print(collect(evaluate_node(child, exploration_term) for child in root.children))
     return lastmove(select_child(root, exploration_term).position)
 end
