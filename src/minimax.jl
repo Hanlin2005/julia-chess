@@ -67,7 +67,7 @@ end
 function move(position::Board, depth::Int)
 
     #if white
-    if sidetomove(position) == "WHITE"
+    if sidetomove(position) == WHITE
         best_eval = -Inf
         best_move = first(moves(position))
 
