@@ -1,6 +1,7 @@
 #This environment is for comparing the performance of chess engines.
 using Chess
 include("../src/engine.jl")
+include("../src/minimax.jl")
 
 mutable struct Engine
     func::Function
@@ -31,17 +32,22 @@ function elo_update(playerA::Engine, playerB::Engine, result::Int, K::Int)
 end
 
 #Code to simulate one game, here player A is white
-function run_game(playerA::Engine, playerB::Engine)
+function run_game(playerA::Engine, playerB::Engine, max_moves::Int = 100)       #set max moves to avoid long games
     playerAturn = true
     board = startboard()
+    movenum = 0
+    print("Starting a new game\n")
 
-    while !isterminal(board)
+    while !isterminal(board) && movenum <= max_moves
+        movenum += 1
         if playerAturn
             move = playerA.func(board)
             playerAturn = false
+            #print("Player A move: ", move, "\n")
         else
             move = playerB.func(board)
             playerAturn = true
+            #print("Player B move: ", move, "\n")
         end
         
         domove!(board, move)
@@ -94,14 +100,25 @@ function create_mcts(simulations::Int, initial_elo::Int = 1000, max_children::In
     return Engine(mcts_func, initial_elo)
 end
 
-players = Vector{Engine}()
-for i in 1:5
-    push!(players, create_mcts(100))
+function create_minimax(depth::Int, initial_elo::Int = 1000)
+
+    function minimax_func(board::Board)
+        return move(board, depth)
+    end
+    return Engine(minimax_func, initial_elo)
 end
 
-simulate_games(100,players)
+players = Vector{Engine}()
+for i in 1:2
+    push!(players, create_minimax(3))
+end
+for i in 1:2
+    push!(players, create_mcts(1000))
+end
+
+simulate_games(5,players)
 
 for player in players
     println("players and scores: ")
-    print(player.eloscore, " ")
+    println(player.eloscore, " ")
 end

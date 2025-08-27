@@ -4,6 +4,7 @@ using Chess
 using Random
 script_dir = @__DIR__
 include(joinpath(script_dir, "engine.jl"))
+include(joinpath(script_dir, "minimax.jl"))
 
 #todo: implement functionality for debugging, respond to debug, setoption, register, return options, 
 
@@ -42,7 +43,8 @@ function launch_search(bd::Board)
     last_board[] = bd
     thinking[]   = true
     search_task[] = @async begin
-        mv = tostring(mcts(bd, 5000, max_children = 1000))
+        #mv = tostring(mcts(bd, 5000, max_children = 1000)) #change to desired search function
+        mv = tostring(move(bd, 3)) #change to desired search function
         println("bestmove $mv")
         flush(stdout)
         thinking[] = false
