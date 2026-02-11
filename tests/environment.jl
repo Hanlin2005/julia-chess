@@ -161,11 +161,11 @@ for i in 1:2
     push!(players, create_minimax(3))
 end
 
-#=
+
 for i in 1:2
-    push!(players, create_mcts(1000))
+    push!(players, create_mcts(5000))
 end
-=#
+
 
 simulate_games_with_log(1,players)
 
