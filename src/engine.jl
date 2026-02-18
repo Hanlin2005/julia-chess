@@ -41,15 +41,15 @@ function rollout(currentNode::Node)
     while !isterminal(position)
         legalmoves = moves(position)
         position = domove(position, rand(legalmoves))
-        movecount += 5
+        movecount += 1
     end
     
     if ischeckmate(position) && sidetomove(position) == nodeColor && movecount == 0
-        back_propagate(currentNode, 1000)
+        back_propagate(currentNode, -1000)
     elseif ischeckmate(position) && sidetomove(position) == nodeColor
-        back_propagate(currentNode, 100 - movecount)
+        back_propagate(currentNode, -100 - movecount)   #Loses
     elseif ischeckmate(position) && sidetomove(position) != nodeColor
-        back_propagate(currentNode, -100 - movecount)
+        back_propagate(currentNode, 100 - movecount)    #Wins
     else
         back_propagate(currentNode, 0)
     end
@@ -129,5 +129,8 @@ function mcts(initial_position::Board, simulations::Int; max_children::Int = 10,
     end
 
     #print(collect(evaluate_node(child, exploration_term) for child in root.children))
-    return lastmove(select_child(root, exploration_term).position)
+    #return lastmove(select_child(root, exploration_term).position)
+    best_idx = argmax(i -> root.children[i].visits, 1:length(root.children))
+    return lastmove(root.children[best_idx].position)
+
 end

@@ -4,12 +4,13 @@ include("../src/engine.jl")
 include("../src/minimax.jl")
 
 mutable struct Engine
+    name::String
     func::Function
     eloscore::Float64
 end
 
-function create_engine(func::Function, initial_elo::Float64 = 1000)
-    return Engine(func, initial_elo)
+function create_engine(name::String, func::Function, initial_elo::Float64 = 1000.0)
+    return Engine(name, func, initial_elo)
 end
 
 #ELO update
@@ -140,7 +141,7 @@ function create_mcts(simulations::Int, initial_elo::Int = 1000, max_children::In
         return mcts(board, simulations, max_children = max_children, exploration_term = exploration_term)
     end
 
-    return Engine(mcts_func, initial_elo)
+    return Engine("mcts(sims=$simulations)", mcts_func, Float64(initial_elo))
 end
 
 function create_minimax(depth::Int, initial_elo::Int = 1000)
@@ -148,28 +149,5 @@ function create_minimax(depth::Int, initial_elo::Int = 1000)
     function minimax_func(board::Board)
         return move(board, depth)
     end
-    return Engine(minimax_func, initial_elo)
-end
-
-
-
-players = Vector{Engine}()
-
-
-
-for i in 1:2
-    push!(players, create_minimax(3))
-end
-
-
-for i in 1:2
-    push!(players, create_mcts(5000))
-end
-
-
-simulate_games_with_log(1,players)
-
-for player in players
-    println("players and scores: ")
-    println(player.eloscore, " ")
+    return Engine("minimax(depth=$depth)", minimax_func, Float64(initial_elo))
 end

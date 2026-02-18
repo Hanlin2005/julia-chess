@@ -40,9 +40,9 @@ function evaluate(position)
         end
     end
 
-    if ischeckmate(position) && sidetomove(position) == "BLACK"
+    if ischeckmate(position) && sidetomove(position) == BLACK
         white_score += 99999
-    elseif ischeckmate(position) && sidetomove(position) == "WHITE"
+    elseif ischeckmate(position) && sidetomove(position) == WHITE
         black_score += 99999
     end
 
@@ -73,7 +73,7 @@ function move(position::Board, depth::Int)
 
         for move in moves(position)
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth, true)
+            evaluation = minimax(new_position, depth, false)
             if evaluation > best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
@@ -86,7 +86,7 @@ function move(position::Board, depth::Int)
         best_move = first(moves(position))
         for move in moves(position)
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth, false)
+            evaluation = minimax(new_position, depth, true)
             if evaluation < best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
