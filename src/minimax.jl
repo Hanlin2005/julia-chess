@@ -1,7 +1,9 @@
 #This is code for a minimax engine
 using Chess
 
-function minimax(position::Board, depth::Int, maximizingPlayer::Bool)
+const CHECKMATE_SCORE = 99999
+
+function minimax(position::Board, depth::Int, maximizingPlayer::Bool, alpha = -Inf, beta = Inf)
     if depth == 0 || isterminal(position)
         return evaluate(position)
     end
@@ -9,21 +11,32 @@ function minimax(position::Board, depth::Int, maximizingPlayer::Bool)
     if maximizingPlayer
         max_evaluation = -Inf
         for child in moves(position)
-            evaluation = minimax(domove(position, child), depth-1, false)
+            evaluation = minimax(domove(position, child), depth-1, false, alpha, beta)
             max_evaluation = max(max_evaluation, evaluation)
+            alpha = max(alpha, max_evaluation)
+            alpha >= beta && break
         end
         return max_evaluation
     else
         min_evaluation = Inf
         for child in moves(position)
-            evaluation = minimax(domove(position, child), depth-1, true)
+            evaluation = minimax(domove(position, child), depth-1, true, alpha, beta)
             min_evaluation = min(min_evaluation, evaluation)
+            beta = min(beta, min_evaluation)
+            alpha >= beta && break
         end
         return min_evaluation
     end
 end
 
 function evaluate(position)
+    if ischeckmate(position) && sidetomove(position) == BLACK
+        return CHECKMATE_SCORE
+    elseif ischeckmate(position) && sidetomove(position) == WHITE
+        return -CHECKMATE_SCORE
+    elseif isterminal(position)
+        return 0
+    end
 
     white_score = 0
     black_score = 0
@@ -38,12 +51,6 @@ function evaluate(position)
         else
             black_score += value
         end
-    end
-
-    if ischeckmate(position) && sidetomove(position) == BLACK
-        white_score += 99999
-    elseif ischeckmate(position) && sidetomove(position) == WHITE
-        black_score += 99999
     end
 
     return white_score - black_score
@@ -70,27 +77,34 @@ function move(position::Board, depth::Int)
     if sidetomove(position) == WHITE
         best_eval = -Inf
         best_move = first(moves(position))
+        alpha = -Inf
+        beta = Inf
 
         for move in moves(position)
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth, false)
+            evaluation = minimax(new_position, depth, false, alpha, beta)
             if evaluation > best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
             end
+            alpha = max(alpha, best_eval)
         end
 
         return best_move
     else
         best_eval = Inf
         best_move = first(moves(position))
+        alpha = -Inf
+        beta = Inf
+
         for move in moves(position)
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth, true)
+            evaluation = minimax(new_position, depth, true, alpha, beta)
             if evaluation < best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
             end
+            beta = min(beta, best_eval)
         end
         
         return best_move
