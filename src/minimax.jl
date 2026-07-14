@@ -1,5 +1,6 @@
 #This is code for a minimax engine
 using Chess
+include(joinpath(@__DIR__, "move_ordering.jl"))
 
 const CHECKMATE_SCORE = 99999
 
@@ -10,7 +11,7 @@ function minimax(position::Board, depth::Int, maximizingPlayer::Bool, alpha = -I
 
     if maximizingPlayer
         max_evaluation = -Inf
-        for child in moves(position)
+        for child in ordered_moves(position)
             evaluation = minimax(domove(position, child), depth-1, false, alpha, beta)
             max_evaluation = max(max_evaluation, evaluation)
             alpha = max(alpha, max_evaluation)
@@ -19,7 +20,7 @@ function minimax(position::Board, depth::Int, maximizingPlayer::Bool, alpha = -I
         return max_evaluation
     else
         min_evaluation = Inf
-        for child in moves(position)
+        for child in ordered_moves(position)
             evaluation = minimax(domove(position, child), depth-1, true, alpha, beta)
             min_evaluation = min(min_evaluation, evaluation)
             beta = min(beta, min_evaluation)
@@ -72,17 +73,19 @@ function get_piece_value(pt::PieceType)
 end
 
 function move(position::Board, depth::Int)
+    depth >= 1 || throw(ArgumentError("search depth must be at least 1"))
+    legal_moves = ordered_moves(position)
 
     #if white
     if sidetomove(position) == WHITE
         best_eval = -Inf
-        best_move = first(moves(position))
+        best_move = first(legal_moves)
         alpha = -Inf
         beta = Inf
 
-        for move in moves(position)
+        for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth, false, alpha, beta)
+            evaluation = minimax(new_position, depth - 1, false, alpha, beta)
             if evaluation > best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
@@ -93,13 +96,13 @@ function move(position::Board, depth::Int)
         return best_move
     else
         best_eval = Inf
-        best_move = first(moves(position))
+        best_move = first(legal_moves)
         alpha = -Inf
         beta = Inf
 
-        for move in moves(position)
+        for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth, true, alpha, beta)
+            evaluation = minimax(new_position, depth - 1, true, alpha, beta)
             if evaluation < best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
