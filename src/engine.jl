@@ -93,7 +93,7 @@ function select_child(currentNode::Node, exploration_term::Float64)
 end
 
 #MCTS algorithm
-function mcts(initial_position::Board, simulations::Int; max_children::Int = 10, exploration_term = 2.0)
+function mcts(initial_position::Board, simulations::Int; max_children::Int = 10, exploration_term = 2.0, stop_time::Union{Float64, Nothing} = nothing)
 
     #make sure root node has children
     root = create_node(initial_position)
@@ -104,8 +104,13 @@ function mcts(initial_position::Board, simulations::Int; max_children::Int = 10,
        # print(sidetomove(root.children[1].position))
     #end
 
-    #start iterations
-    for _ in 1:simulations
+    # Without stop_time, run exactly `simulations`. With it, run until that time, and at least `simulations`.
+    completed = 0
+    while true
+        if completed >= simulations && (stop_time === nothing || time() >= stop_time)
+            break
+        end
+        completed += 1
         current = root
 
         while !isempty(current.children)

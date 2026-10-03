@@ -5,6 +5,9 @@ using Random
 script_dir = @__DIR__
 include(joinpath(script_dir, "engine.jl"))
 include(joinpath(script_dir, "minimax.jl"))
+include(joinpath(script_dir, "searches.jl"))
+
+const active_engine = engine_from_args(ARGS)
 
 #todo: implement functionality for debugging, respond to debug, setoption, register, return options, 
 
@@ -39,12 +42,12 @@ end
 #Code for asynchronous Search
 
 #Launch asynchronous Search
-function launch_search(bd::Board)
+function launch_search(bd::Board, go_line::AbstractString)
     last_board[] = bd
     thinking[]   = true
     search_task[] = @async begin
-        #mv = tostring(mcts(bd, 5000, max_children = 1000)) #change to desired search function
-        mv = tostring(move(bd, 3)) #change to desired search function
+        seconds = move_time(go_line, bd)
+        mv = tostring(choose_move(active_engine, bd, seconds))
         println("bestmove $mv")
         flush(stdout)
         thinking[] = false
@@ -86,7 +89,7 @@ while true
         elseif length(input) >= 2 && input[1:2] == "go"
 
             thinking[] && (println("info string aborting old search"); thinking[] = false)
-            launch_search(last_board[])
+            launch_search(last_board[], input)
         
         elseif input == "stop"
             if thinking[]
