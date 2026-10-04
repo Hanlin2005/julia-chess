@@ -19,4 +19,5 @@ const SEARCH_DEPTH = search_depth
     include("repetition.jl")
     include("transposition.jl")
     include("evaluation.jl")
+    include("quiescence.jl")
 end
