@@ -12,9 +12,11 @@ end
 
     after = fromfen("3rk3/8/8/8/3Q4/8/8/4K3 b - - 0 1")
     static = material_score(after)
+    before = fen(after)
     resolved = quiescence(after, false, -Inf, Inf, 0, UInt64[], nothing, static)
     @test static > 0
     @test resolved < 0
+    @test fen(after) == before
 
     free = fromfen("4k3/8/8/8/3p4/8/8/3QK3 w - - 0 1")
     @test tostring(move(free, 1)) == "d1d4"

@@ -79,4 +79,22 @@ end
     @test !probe(draw_table, draw_board.key, 1, -Inf, Inf, 0).hit
 
     @test choose_move(MinimaxSearch(1), search_board, 0.0) in moves(search_board)
+
+    order_board = fromfen("4k3/8/7q/6P1/8/8/8/4K2Q w - - 0 1")
+    @test tostring(ordered_moves(order_board)[1]) == "g5h6"
+    before = fen(order_board)
+    move(order_board, 2)
+    @test fen(order_board) == before
+    minimax(order_board, 2, true)
+    @test fen(order_board) == before
+
+    persistent = MinimaxSearch(1)
+    held = persistent.table
+    choose_move(persistent, startboard(), 0.0)
+    @test persistent.table === held
+    @test probe(held, startboard().key, 1, -Inf, Inf, 0).cutoff
+    new_generation!(held)
+    @test probe(held, startboard().key, 1, -Inf, Inf, 0).hit
+    clear!(held)
+    @test !probe(held, startboard().key, 1, -Inf, Inf, 0).hit
 end

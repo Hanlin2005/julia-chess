@@ -88,7 +88,7 @@ function minimax(
             best_move = MOVE_NULL
             for child in ordered_moves(position, hash_move)
                 child_score = update_score(position, child, current)
-                evaluation = minimax(domove(position, child), depth - 1, false, alpha, beta, ply + 1, path, table, child_score)
+                evaluation = minimax_child(position, child, depth - 1, false, alpha, beta, ply + 1, path, table, child_score)
                 if evaluation > max_evaluation
                     max_evaluation = evaluation
                     best_move = child
@@ -112,7 +112,7 @@ function minimax(
             best_move = MOVE_NULL
             for child in ordered_moves(position, hash_move)
                 child_score = update_score(position, child, current)
-                evaluation = minimax(domove(position, child), depth - 1, true, alpha, beta, ply + 1, path, table, child_score)
+                evaluation = minimax_child(position, child, depth - 1, true, alpha, beta, ply + 1, path, table, child_score)
                 if evaluation < min_evaluation
                     min_evaluation = evaluation
                     best_move = child
@@ -210,7 +210,7 @@ function quiescence(
             best_move = MOVE_NULL
             for child in tactical
                 child_score = update_score(position, child, score)
-                evaluation = quiescence(domove(position, child), false, alpha, beta, ply + 1, path, table, child_score, remaining - 1)
+                evaluation = quiescence_child(position, child, false, alpha, beta, ply + 1, path, table, child_score, remaining - 1)
                 if evaluation > max_evaluation
                     max_evaluation = evaluation
                     best_move = child
@@ -234,7 +234,7 @@ function quiescence(
             best_move = MOVE_NULL
             for child in tactical
                 child_score = update_score(position, child, score)
-                evaluation = quiescence(domove(position, child), true, alpha, beta, ply + 1, path, table, child_score, remaining - 1)
+                evaluation = quiescence_child(position, child, true, alpha, beta, ply + 1, path, table, child_score, remaining - 1)
                 if evaluation < min_evaluation
                     min_evaluation = evaluation
                     best_move = child
@@ -259,6 +259,24 @@ function quiescence(
     end
 end
 
+function minimax_child(position, child, depth, maximizing, alpha, beta, ply, path, table, child_score)
+    undo = domove!(position, child)
+    try
+        return minimax(position, depth, maximizing, alpha, beta, ply, path, table, child_score)
+    finally
+        undomove!(position, undo)
+    end
+end
+
+function quiescence_child(position, child, maximizing, alpha, beta, ply, path, table, child_score, remaining)
+    undo = domove!(position, child)
+    try
+        return quiescence(position, maximizing, alpha, beta, ply, path, table, child_score, remaining)
+    finally
+        undomove!(position, undo)
+    end
+end
+
 function move(
     position::Board,
     depth::Int,
@@ -275,29 +293,32 @@ function move(
         return probed.best_move
     end
 
-    legal_moves = ordered_moves(position, probed.best_move)
+    working = emptyboard()
+    Chess.copyto!(working, position)
+    legal_moves = ordered_moves(working, probed.best_move)
     path = history === nothing ? UInt64[] : copy(history)
-    push!(path, position.key)
-    current = material_score(position)
+    push!(path, working.key)
+    current = material_score(working)
+    root_key = working.key
 
     #if white
-    if sidetomove(position) == WHITE
+    if sidetomove(working) == WHITE
         best_eval = -Inf
         best_move = first(legal_moves)
         alpha = -Inf
         beta = Inf
 
-        for move in legal_moves
-            new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, false, alpha, beta, 1, path, table, update_score(position, move, current))
+        for candidate in legal_moves
+            child_score = update_score(working, candidate, current)
+            evaluation = minimax_child(working, candidate, depth - 1, false, alpha, beta, 1, path, table, child_score)
             if evaluation > best_eval
                 best_eval = evaluation
-                best_move = lastmove(new_position)
+                best_move = candidate
             end
             alpha = max(alpha, best_eval)
         end
 
-        store!(table, position.key, depth, pack_score(best_eval, 0), EXACT, best_move)
+        store!(table, root_key, depth, pack_score(best_eval, 0), EXACT, best_move)
         return best_move
     else
         best_eval = Inf
@@ -305,17 +326,17 @@ function move(
         alpha = -Inf
         beta = Inf
 
-        for move in legal_moves
-            new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, true, alpha, beta, 1, path, table, update_score(position, move, current))
+        for candidate in legal_moves
+            child_score = update_score(working, candidate, current)
+            evaluation = minimax_child(working, candidate, depth - 1, true, alpha, beta, 1, path, table, child_score)
             if evaluation < best_eval
                 best_eval = evaluation
-                best_move = lastmove(new_position)
+                best_move = candidate
             end
             beta = min(beta, best_eval)
         end
 
-        store!(table, position.key, depth, pack_score(best_eval, 0), EXACT, best_move)
+        store!(table, root_key, depth, pack_score(best_eval, 0), EXACT, best_move)
         return best_move
 
     end

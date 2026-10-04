@@ -2,8 +2,8 @@ using Chess
 
 const PROMOTION_ORDER_BONUS = 30_000
 const CAPTURE_ORDER_BONUS = 20_000
-const CHECK_ORDER_BONUS = 10_000
-const EXCHANGE_ORDER_MULTIPLIER = 100
+# Pawn, knight, bishop, rook, queen, king. The king is dearest so it captures last.
+const ORDER_PIECE_VALUE = (100, 320, 330, 500, 900, 10_000)
 
 function promotion_order_value(piece_type::PieceType)
     if piece_type == QUEEN
@@ -25,6 +25,17 @@ end
 Assign a tactical priority to a legal move. The score is only used to decide
 which moves alpha-beta searches first; it is not a position evaluation.
 """
+function exchange_order_value(position::Board, move::Move)
+    attacker = ORDER_PIECE_VALUE[ptype(pieceon(position, from(move))).val]
+    if moveisep(position, move)
+        victim = ORDER_PIECE_VALUE[1]
+    else
+        captured = pieceon(position, to(move))
+        victim = captured == EMPTY ? 0 : ORDER_PIECE_VALUE[ptype(captured).val]
+    end
+    return victim - attacker
+end
+
 function move_order_score(position::Board, move::Move)
     score = 0
 
@@ -33,11 +44,7 @@ function move_order_score(position::Board, move::Move)
     end
 
     if moveiscapture(position, move)
-        score += CAPTURE_ORDER_BONUS + EXCHANGE_ORDER_MULTIPLIER * see(position, move)
-    end
-
-    if moveischeck(position, move)
-        score += CHECK_ORDER_BONUS
+        score += CAPTURE_ORDER_BONUS + exchange_order_value(position, move)
     end
 
     return score

@@ -83,6 +83,7 @@ while true
 
         elseif input == "ucinewgame"
             last_history[] = UInt64[]
+            new_game!(active_engine)
 
         elseif length(input) >= 8 && input[1:8] == "position"
             last_board[], last_history[] = board_from_position(input)

@@ -238,15 +238,15 @@ end
 function ask_yes_no(prompt)
     while true
         print(prompt, " [y/n] ")
-        answer = readline()
-        if eof(stdin) && strip(answer) == ""
-            println()
-            return false
-        end
-        answer = lowercase(strip(answer))
+        flush(stdout)
+        answer = lowercase(strip(readline()))
         if answer == "y" || answer == "yes"
             return true
         elseif answer == "n" || answer == "no"
+            return false
+        elseif answer == "" && (stdin isa Base.TTY ? !isreadable(stdin) : eof(stdin))
+            # eof(stdin) on a TTY reads one byte ahead and steals the next line.
+            println()
             return false
         end
         println("Please type y or n.")
@@ -305,6 +305,7 @@ function main()
     note = ""
     if ask_yes_no("Add a note?")
         print("Note: ")
+        flush(stdout)
         note = strip(readline())
     end
     save_benchmark_history(results, SEARCH_DEPTH, elapsed, ran_at, note)

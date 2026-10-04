@@ -1,6 +1,9 @@
 struct MinimaxSearch
     depth::Int
+    table::TranspositionTable
 end
+
+MinimaxSearch(depth::Int) = MinimaxSearch(depth, TranspositionTable())
 
 struct MonteCarloSearch
     simulations::Int
@@ -53,9 +56,9 @@ function choose_move(
     seconds::Float64,
     history::Union{Nothing,Vector{UInt64}} = nothing,
 )
-    table = TranspositionTable()
+    new_generation!(search.table)
     started = time()
-    best = move(board, search.depth, history, table)
+    best = move(board, search.depth, history, search.table)
     last_duration = time() - started
     depth = search.depth + 1
 
@@ -65,7 +68,7 @@ function choose_move(
             break
         end
         began = time()
-        best = move(board, depth, history, table)
+        best = move(board, depth, history, search.table)
         last_duration = time() - began
         depth += 1
     end
@@ -93,6 +96,16 @@ function choose_move(
     history::Union{Nothing,Vector{UInt64}} = nothing,
 )
     choose_move(engine.search, board, seconds, history)
+end
+
+function new_game!(search::MinimaxSearch)
+    clear!(search.table)
+end
+
+function new_game!(::MonteCarloSearch) end
+
+function new_game!(engine::Engine)
+    new_game!(engine.search)
 end
 
 function engine_from_args(args)

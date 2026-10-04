@@ -36,6 +36,12 @@ function TranspositionTable(size::Int = 1 << 18)
     return TranspositionTable(fill(EMPTY_ENTRY, slots), UInt8(1))
 end
 
+function clear!(table::TranspositionTable)
+    fill!(table.entries, EMPTY_ENTRY)
+    table.generation = UInt8(1)
+    return table
+end
+
 function new_generation!(table::TranspositionTable)
     if table.generation == typemax(UInt8)
         table.generation = UInt8(1)
