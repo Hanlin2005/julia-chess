@@ -17,4 +17,5 @@ const SEARCH_DEPTH = search_depth
     include("nnue.jl")
     include("optimal_moves.jl")
     include("repetition.jl")
+    include("transposition.jl")
 end

@@ -1,6 +1,7 @@
 #This is code for a minimax engine
 using Chess
 include(joinpath(@__DIR__, "move_ordering.jl"))
+include(joinpath(@__DIR__, "transposition.jl"))
 
 const CHECKMATE_SCORE = 99999
 
@@ -43,6 +44,7 @@ function minimax(
     beta = Inf,
     ply::Int = 0,
     history::Union{Nothing,Vector{UInt64}} = nothing,
+    table::Union{Nothing,TranspositionTable} = nothing,
 )
     path = history === nothing ? UInt64[] : history
     if ischeckmate(position)
@@ -51,28 +53,74 @@ function minimax(
     if repeated(path, position.key, Int(position.r50), ply)
         return 0
     end
+
+    original_alpha = alpha
+    original_beta = beta
+    hash_move = MOVE_NULL
+    if table !== nothing
+        probed = probe(table, position.key, depth, alpha, beta, ply)
+        hash_move = probed.best_move
+        if probed.cutoff
+            return probed.score
+        end
+        alpha = probed.alpha
+        beta = probed.beta
+    end
+
     if depth == 0 || isterminal(position)
-        return evaluate(position)
+        score = evaluate(position)
+        if table !== nothing
+            store!(table, position.key, depth, pack_score(score, ply), EXACT, MOVE_NULL)
+        end
+        return score
     end
 
     push!(path, position.key)
     try
         if maximizingPlayer
             max_evaluation = -Inf
-            for child in ordered_moves(position)
-                evaluation = minimax(domove(position, child), depth - 1, false, alpha, beta, ply + 1, path)
-                max_evaluation = max(max_evaluation, evaluation)
+            best_move = MOVE_NULL
+            for child in ordered_moves(position, hash_move)
+                evaluation = minimax(domove(position, child), depth - 1, false, alpha, beta, ply + 1, path, table)
+                if evaluation > max_evaluation
+                    max_evaluation = evaluation
+                    best_move = child
+                end
                 alpha = max(alpha, max_evaluation)
                 alpha >= beta && break
+            end
+            if table !== nothing && best_move != MOVE_NULL
+                bound = if alpha >= beta
+                    LOWER
+                elseif max_evaluation <= original_alpha
+                    UPPER
+                else
+                    EXACT
+                end
+                store!(table, position.key, depth, pack_score(max_evaluation, ply), bound, best_move)
             end
             return max_evaluation
         else
             min_evaluation = Inf
-            for child in ordered_moves(position)
-                evaluation = minimax(domove(position, child), depth - 1, true, alpha, beta, ply + 1, path)
-                min_evaluation = min(min_evaluation, evaluation)
+            best_move = MOVE_NULL
+            for child in ordered_moves(position, hash_move)
+                evaluation = minimax(domove(position, child), depth - 1, true, alpha, beta, ply + 1, path, table)
+                if evaluation < min_evaluation
+                    min_evaluation = evaluation
+                    best_move = child
+                end
                 beta = min(beta, min_evaluation)
                 alpha >= beta && break
+            end
+            if table !== nothing && best_move != MOVE_NULL
+                bound = if alpha >= beta
+                    UPPER
+                elseif min_evaluation >= original_beta
+                    LOWER
+                else
+                    EXACT
+                end
+                store!(table, position.key, depth, pack_score(min_evaluation, ply), bound, best_move)
             end
             return min_evaluation
         end
@@ -123,9 +171,23 @@ function get_piece_value(pt::PieceType)
     return 0
 end
 
-function move(position::Board, depth::Int, history::Union{Nothing,Vector{UInt64}} = nothing)
+function move(
+    position::Board,
+    depth::Int,
+    history::Union{Nothing,Vector{UInt64}} = nothing,
+    table::Union{Nothing,TranspositionTable} = nothing,
+)
     depth >= 1 || throw(ArgumentError("search depth must be at least 1"))
-    legal_moves = ordered_moves(position)
+    if table === nothing
+        table = TranspositionTable()
+    end
+
+    probed = probe(table, position.key, depth, -Inf, Inf, 0)
+    if probed.cutoff && probed.best_move != MOVE_NULL
+        return probed.best_move
+    end
+
+    legal_moves = ordered_moves(position, probed.best_move)
     path = history === nothing ? UInt64[] : copy(history)
     push!(path, position.key)
 
@@ -138,7 +200,7 @@ function move(position::Board, depth::Int, history::Union{Nothing,Vector{UInt64}
 
         for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, false, alpha, beta, 1, path)
+            evaluation = minimax(new_position, depth - 1, false, alpha, beta, 1, path, table)
             if evaluation > best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
@@ -146,6 +208,7 @@ function move(position::Board, depth::Int, history::Union{Nothing,Vector{UInt64}
             alpha = max(alpha, best_eval)
         end
 
+        store!(table, position.key, depth, pack_score(best_eval, 0), EXACT, best_move)
         return best_move
     else
         best_eval = Inf
@@ -155,7 +218,7 @@ function move(position::Board, depth::Int, history::Union{Nothing,Vector{UInt64}
 
         for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, true, alpha, beta, 1, path)
+            evaluation = minimax(new_position, depth - 1, true, alpha, beta, 1, path, table)
             if evaluation < best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
@@ -163,6 +226,7 @@ function move(position::Board, depth::Int, history::Union{Nothing,Vector{UInt64}
             beta = min(beta, best_eval)
         end
 
+        store!(table, position.key, depth, pack_score(best_eval, 0), EXACT, best_move)
         return best_move
 
     end

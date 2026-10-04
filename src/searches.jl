@@ -53,8 +53,9 @@ function choose_move(
     seconds::Float64,
     history::Union{Nothing,Vector{UInt64}} = nothing,
 )
+    table = TranspositionTable()
     started = time()
-    best = move(board, search.depth, history)
+    best = move(board, search.depth, history, table)
     last_duration = time() - started
     depth = search.depth + 1
 
@@ -64,7 +65,7 @@ function choose_move(
             break
         end
         began = time()
-        best = move(board, depth, history)
+        best = move(board, depth, history, table)
         last_duration = time() - began
         depth += 1
     end

@@ -44,13 +44,22 @@ function move_order_score(position::Board, move::Move)
 end
 
 """
-    ordered_moves(position)
+    ordered_moves(position, hash_move=MOVE_NULL)
 
 Return legal moves with tactically promising moves first, allowing alpha-beta
-to establish tighter bounds and prune more branches.
+to establish tighter bounds and prune more branches. A move stored in the
+transposition table is searched before those tactical moves.
 """
-function ordered_moves(position::Board)
+function ordered_moves(position::Board, hash_move::Move = MOVE_NULL)
     legal_moves = collect(moves(position))
     sort!(legal_moves, by = move -> move_order_score(position, move), rev = true)
+    if hash_move != MOVE_NULL
+        index = findfirst(==(hash_move), legal_moves)
+        if index !== nothing && index > 1
+            best = legal_moves[index]
+            deleteat!(legal_moves, index)
+            pushfirst!(legal_moves, best)
+        end
+    end
     return legal_moves
 end
