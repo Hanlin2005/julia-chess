@@ -47,9 +47,14 @@ function move_time(go_line::AbstractString, board::Board)
 end
 
 # `search.depth` always finishes. Later depths start only while the budget remains.
-function choose_move(search::MinimaxSearch, board::Board, seconds::Float64)
+function choose_move(
+    search::MinimaxSearch,
+    board::Board,
+    seconds::Float64,
+    history::Union{Nothing,Vector{UInt64}} = nothing,
+)
     started = time()
-    best = move(board, search.depth)
+    best = move(board, search.depth, history)
     last_duration = time() - started
     depth = search.depth + 1
 
@@ -59,7 +64,7 @@ function choose_move(search::MinimaxSearch, board::Board, seconds::Float64)
             break
         end
         began = time()
-        best = move(board, depth)
+        best = move(board, depth, history)
         last_duration = time() - began
         depth += 1
     end
@@ -68,14 +73,26 @@ function choose_move(search::MinimaxSearch, board::Board, seconds::Float64)
 end
 
 # The simulation count always finishes. A positive budget keeps searching the same tree until that time.
-function choose_move(search::MonteCarloSearch, board::Board, seconds::Float64)
+function choose_move(
+    search::MonteCarloSearch,
+    board::Board,
+    seconds::Float64,
+    history::Union{Nothing,Vector{UInt64}} = nothing,
+)
     if seconds > 0
-        return mcts(board, search.simulations; stop_time = time() + seconds)
+        return mcts(board, search.simulations; stop_time = time() + seconds, history = history)
     end
-    return mcts(board, search.simulations)
+    return mcts(board, search.simulations; history = history)
 end
 
-choose_move(engine::Engine, board::Board, seconds::Float64) = choose_move(engine.search, board, seconds)
+function choose_move(
+    engine::Engine,
+    board::Board,
+    seconds::Float64,
+    history::Union{Nothing,Vector{UInt64}} = nothing,
+)
+    choose_move(engine.search, board, seconds, history)
+end
 
 function engine_from_args(args)
     kind = "minimax"

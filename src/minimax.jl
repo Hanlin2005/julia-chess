@@ -4,29 +4,80 @@ include(joinpath(@__DIR__, "move_ordering.jl"))
 
 const CHECKMATE_SCORE = 99999
 
-function minimax(position::Board, depth::Int, maximizingPlayer::Bool, alpha = -Inf, beta = Inf)
+# White-relative. A mate in fewer plies scores higher, and a loss is delayed when every defense loses.
+function mate_value(position::Board, ply::Int)
+    distance = CHECKMATE_SCORE - ply
+    if sidetomove(position) == BLACK
+        return distance
+    else
+        return -distance
+    end
+end
+
+# Same side to move is two plies back, and a capture or pawn move ends the window.
+# A copy inside this search is a cycle. A second older copy is the third occurrence.
+function repeated(history::Vector{UInt64}, key::UInt64, rule50::Int, ply::Int)
+    rule50 < 4 && return false
+    limit = min(rule50, length(history))
+    matches = 0
+    distance = 2
+    index = length(history) - 1
+    while distance <= limit && index >= 1
+        if history[index] == key
+            matches += 1
+            if distance < ply || matches == 2
+                return true
+            end
+        end
+        distance += 2
+        index -= 2
+    end
+    false
+end
+
+function minimax(
+    position::Board,
+    depth::Int,
+    maximizingPlayer::Bool,
+    alpha = -Inf,
+    beta = Inf,
+    ply::Int = 0,
+    history::Union{Nothing,Vector{UInt64}} = nothing,
+)
+    path = history === nothing ? UInt64[] : history
+    if ischeckmate(position)
+        return mate_value(position, ply)
+    end
+    if repeated(path, position.key, Int(position.r50), ply)
+        return 0
+    end
     if depth == 0 || isterminal(position)
         return evaluate(position)
     end
 
-    if maximizingPlayer
-        max_evaluation = -Inf
-        for child in ordered_moves(position)
-            evaluation = minimax(domove(position, child), depth-1, false, alpha, beta)
-            max_evaluation = max(max_evaluation, evaluation)
-            alpha = max(alpha, max_evaluation)
-            alpha >= beta && break
+    push!(path, position.key)
+    try
+        if maximizingPlayer
+            max_evaluation = -Inf
+            for child in ordered_moves(position)
+                evaluation = minimax(domove(position, child), depth - 1, false, alpha, beta, ply + 1, path)
+                max_evaluation = max(max_evaluation, evaluation)
+                alpha = max(alpha, max_evaluation)
+                alpha >= beta && break
+            end
+            return max_evaluation
+        else
+            min_evaluation = Inf
+            for child in ordered_moves(position)
+                evaluation = minimax(domove(position, child), depth - 1, true, alpha, beta, ply + 1, path)
+                min_evaluation = min(min_evaluation, evaluation)
+                beta = min(beta, min_evaluation)
+                alpha >= beta && break
+            end
+            return min_evaluation
         end
-        return max_evaluation
-    else
-        min_evaluation = Inf
-        for child in ordered_moves(position)
-            evaluation = minimax(domove(position, child), depth-1, true, alpha, beta)
-            min_evaluation = min(min_evaluation, evaluation)
-            beta = min(beta, min_evaluation)
-            alpha >= beta && break
-        end
-        return min_evaluation
+    finally
+        pop!(path)
     end
 end
 
@@ -72,9 +123,11 @@ function get_piece_value(pt::PieceType)
     return 0
 end
 
-function move(position::Board, depth::Int)
+function move(position::Board, depth::Int, history::Union{Nothing,Vector{UInt64}} = nothing)
     depth >= 1 || throw(ArgumentError("search depth must be at least 1"))
     legal_moves = ordered_moves(position)
+    path = history === nothing ? UInt64[] : copy(history)
+    push!(path, position.key)
 
     #if white
     if sidetomove(position) == WHITE
@@ -85,7 +138,7 @@ function move(position::Board, depth::Int)
 
         for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, false, alpha, beta)
+            evaluation = minimax(new_position, depth - 1, false, alpha, beta, 1, path)
             if evaluation > best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
@@ -102,14 +155,14 @@ function move(position::Board, depth::Int)
 
         for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, true, alpha, beta)
+            evaluation = minimax(new_position, depth - 1, true, alpha, beta, 1, path)
             if evaluation < best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
             end
             beta = min(beta, best_eval)
         end
-        
+
         return best_move
 
     end

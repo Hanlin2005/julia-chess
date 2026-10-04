@@ -16,4 +16,5 @@ const SEARCH_DEPTH = search_depth
 @testset "JuliaChess" begin
     include("nnue.jl")
     include("optimal_moves.jl")
+    include("repetition.jl")
 end

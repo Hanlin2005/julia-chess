@@ -30,18 +30,32 @@ function add_children(currentNode::Node, max_children)
 
 end
 
-#Function for rollout
-function rollout(currentNode::Node)
+#Function for rollout. history holds ancestor keys, not this node's.
+function rollout(currentNode::Node, history::Vector{UInt64}, ply::Int)
 
     #Simulate random games until end
     nodeColor = sidetomove(currentNode.position)
     position = currentNode.position
     movecount = 0
 
+    if repeated(history, position.key, Int(position.r50), ply)
+        back_propagate(currentNode, 0)
+        return
+    end
+
+    path = copy(history)
+    push!(path, position.key)
+
     while !isterminal(position)
         legalmoves = moves(position)
         position = domove(position, rand(legalmoves))
         movecount += 1
+        ply += 1
+        if repeated(path, position.key, Int(position.r50), ply)
+            back_propagate(currentNode, 0)
+            return
+        end
+        push!(path, position.key)
     end
     
     if ischeckmate(position) && sidetomove(position) == nodeColor && movecount == 0
@@ -93,7 +107,12 @@ function select_child(currentNode::Node, exploration_term::Float64)
 end
 
 #MCTS algorithm
-function mcts(initial_position::Board, simulations::Int; max_children::Int = 10, exploration_term = 2.0, stop_time::Union{Float64, Nothing} = nothing)
+function mcts(initial_position::Board, simulations::Int; max_children::Int = 10, exploration_term = 2.0, stop_time::Union{Float64, Nothing} = nothing, history::Union{Nothing,Vector{UInt64}} = nothing)
+
+    # Ancestor keys, including the root. Children are checked against this list.
+    path = history === nothing ? UInt64[] : copy(history)
+    push!(path, initial_position.key)
+    root_len = length(path)
 
     #make sure root node has children
     root = create_node(initial_position)
@@ -112,25 +131,40 @@ function mcts(initial_position::Board, simulations::Int; max_children::Int = 10,
         end
         completed += 1
         current = root
+        ply = 0
+        repeated_position = false
 
         while !isempty(current.children)
             current = select_child(current, exploration_term)
+            ply += 1
+            if repeated(path, current.position.key, Int(current.position.r50), ply)
+                back_propagate(current, 0)
+                repeated_position = true
+                break
+            end
+            if isempty(current.children)
+                break
+            end
+            push!(path, current.position.key)
         end
 
-        if isterminal(current.position)
-            rollout(current)
-            continue
-        else
-            if current.visits == 0
-                rollout(current)
+        if !repeated_position
+            if isterminal(current.position) || current.visits == 0
+                rollout(current, path, ply)
             else
+                push!(path, current.position.key)
                 add_children(current, max_children)
                 current = select_child(current, exploration_term)
-                rollout(current)
+                ply += 1
+                if repeated(path, current.position.key, Int(current.position.r50), ply)
+                    back_propagate(current, 0)
+                else
+                    rollout(current, path, ply)
+                end
             end
-
         end
 
+        resize!(path, root_len)
     end
 
     #print(collect(evaluate_node(child, exploration_term) for child in root.children))

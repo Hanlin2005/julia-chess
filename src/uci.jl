@@ -14,40 +14,40 @@ const active_engine = engine_from_args(ARGS)
 #function to load position, make need to revise the length arguments thing
 function board_from_position(input)
     arguments = split(input, " ")
+    history = UInt64[]
 
     if(arguments[2] == "fen")
         fen = join(arguments[3:8], " ")
         board = fromfen(fen)
-
-        if length(arguments) >= 10
-            for move in arguments[10:end]
-                m = movefromstring(String(move))
-                board = domove(board, m)
-            end
+        halfmove = length(arguments) >= 7 ? tryparse(Int, arguments[7]) : nothing
+        if halfmove !== nothing
+            board.r50 = UInt8(clamp(halfmove, 0, 255))
         end
+        moves = length(arguments) >= 10 ? arguments[10:end] : String[]
     else
         board = startboard()
-        if length(arguments) >= 4
-            for move in arguments[4:end]
-                m = movefromstring(String(move))
-                board = domove(board, m)
-            end
-        end
+        moves = length(arguments) >= 4 ? arguments[4:end] : String[]
     end
 
-    return board
+    for move in moves
+        push!(history, board.key)
+        board = domove(board, movefromstring(String(move)))
+    end
+
+    return board, history
 end
 
 
 #Code for asynchronous Search
 
 #Launch asynchronous Search
-function launch_search(bd::Board, go_line::AbstractString)
+function launch_search(bd::Board, go_line::AbstractString, history::Vector{UInt64})
     last_board[] = bd
+    last_history[] = history
     thinking[]   = true
     search_task[] = @async begin
         seconds = move_time(go_line, bd)
-        mv = tostring(choose_move(active_engine, bd, seconds))
+        mv = tostring(choose_move(active_engine, bd, seconds, history))
         println("bestmove $mv")
         flush(stdout)
         thinking[] = false
@@ -63,6 +63,7 @@ end
 const search_task  = Ref{Union{Task, Nothing}}(nothing)
 const thinking     = Ref(false)
 const last_board   = Ref(startboard())
+const last_history = Ref{Vector{UInt64}}(UInt64[])
 
 #This is the UCI loop for interfacing with Lichess
 while true
@@ -81,15 +82,15 @@ while true
             flush(stdout)
 
         elseif input == "ucinewgame"
-            #tells us new game is happening
+            last_history[] = UInt64[]
 
         elseif length(input) >= 8 && input[1:8] == "position"
-            last_board[] = board_from_position(input)
+            last_board[], last_history[] = board_from_position(input)
 
         elseif length(input) >= 2 && input[1:2] == "go"
 
             thinking[] && (println("info string aborting old search"); thinking[] = false)
-            launch_search(last_board[], input)
+            launch_search(last_board[], input, last_history[])
         
         elseif input == "stop"
             if thinking[]
