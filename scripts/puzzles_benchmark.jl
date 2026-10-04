@@ -1,8 +1,9 @@
 # Puzzles benchmark for the minimax engine.
 #
 # The final rating is the highest rating at which every selected puzzle of
-# that rating or lower was solved. Each run appends a row to
-# data/benchmark_history.csv and rebuilds data/benchmark_history.html.
+# that rating or lower was solved. After the results print, the script asks
+# whether to save the run and whether to attach a note. A saved run appends
+# a row to data/benchmark_history.csv and redraws data/benchmark_history.png.
 #
 # Usage:
 #     julia --project=. scripts/puzzles_benchmark.jl [depth]
@@ -27,8 +28,8 @@ end
 
 const SEARCH_DEPTH = search_depth
 const HISTORY_PATH = joinpath(@__DIR__, "..", "data", "benchmark_history.csv")
-const GRAPH_PATH = joinpath(@__DIR__, "..", "data", "benchmark_history.html")
-const HISTORY_HEADER = "ran_at,engine,depth,seconds,puzzles,solved,failed,solved_percent,final_rating,highest_solved,lowest_missed,bands"
+const GRAPH_PATH = joinpath(@__DIR__, "..", "data", "benchmark_history.png")
+const HISTORY_HEADER = "ran_at,engine,depth,seconds,puzzles,solved,failed,solved_percent,final_rating,highest_solved,lowest_missed,bands,note"
 
 function benchmark_summary(results)
     solved_ratings = Int[rating for (rating, ok) in results if ok]
@@ -79,7 +80,11 @@ function band_field(bands)
     return join(parts, ";")
 end
 
-function history_line(ran_at, engine, depth, seconds, results, summary, bands)
+function csv_field(text)
+    return "\"" * replace(text, "\"" => "\"\"") * "\""
+end
+
+function history_line(ran_at, engine, depth, seconds, results, summary, bands, note)
     puzzles = length(results)
     solved = count(ok for (_, ok) in results)
     failed = puzzles - solved
@@ -97,7 +102,8 @@ function history_line(ran_at, engine, depth, seconds, results, summary, bands)
         optional(summary.final), ",",
         optional(summary.highest), ",",
         optional(summary.lowest), ",",
-        "\"", band_field(bands), "\"",
+        "\"", band_field(bands), "\",",
+        csv_field(note),
     )
 end
 
@@ -115,14 +121,23 @@ function parse_csv_line(line)
     fields = String[]
     current = IOBuffer()
     quoted = false
-    for character in line
+    characters = collect(line)
+    index = 1
+    while index <= length(characters)
+        character = characters[index]
         if character == '"'
+            if quoted && index < length(characters) && characters[index + 1] == '"'
+                print(current, '"')
+                index += 2
+                continue
+            end
             quoted = !quoted
         elseif character == ',' && !quoted
             push!(fields, String(take!(current)))
         else
             print(current, character)
         end
+        index += 1
     end
     push!(fields, String(take!(current)))
     return fields
@@ -170,109 +185,72 @@ function read_history(path)
             highest_solved = parse_optional_int(fields[10]),
             lowest_missed = parse_optional_int(fields[11]),
             bands = parse_bands(fields[12]),
+            note = length(fields) >= 13 ? fields[13] : "",
         ))
     end
     return runs
 end
 
-json_string(text) = "\"" * replace(text, "\\" => "\\\\", "\"" => "\\\"") * "\""
-json_int(value) = value === nothing ? "null" : string(value)
-
-function runs_json(runs)
-    rows = String[]
-    for run in runs
-        bands = join([
-            "{\"band\":$(row.band),\"solved\":$(row.solved),\"total\":$(row.total),\"solved_percent\":$(row.solved_percent),\"failed_percent\":$(row.failed_percent)}"
-            for row in run.bands
-        ], ",")
-        push!(rows, "{" *
-            "\"ran_at\":$(json_string(run.ran_at))," *
-            "\"engine\":$(json_string(run.engine))," *
-            "\"depth\":$(run.depth)," *
-            "\"seconds\":$(run.seconds)," *
-            "\"puzzles\":$(run.puzzles)," *
-            "\"solved\":$(run.solved)," *
-            "\"failed\":$(run.failed)," *
-            "\"solved_percent\":$(run.solved_percent)," *
-            "\"final_rating\":$(json_int(run.final_rating))," *
-            "\"highest_solved\":$(json_int(run.highest_solved))," *
-            "\"lowest_missed\":$(json_int(run.lowest_missed))," *
-            "\"bands\":[$bands]}"
-        )
-    end
-    return "[" * join(rows, ",") * "]"
-end
-
 function write_benchmark_graph(path, runs)
+    @eval using Plots
+    Base.invokelatest(draw_benchmark_graph, path, runs)
+end
+
+function draw_benchmark_graph(path, runs)
+    runs_index = 1:length(runs)
+    labels = [run.ran_at for run in runs]
+    ticks = (marker = :circle, legend = false, xticks = (runs_index, labels), xrotation = 30, bottom_margin = 12Plots.mm, xtickfontsize = 8)
+    ratings = [run.final_rating === nothing ? NaN : Float64(run.final_rating) for run in runs]
+    rating_plot = plot(runs_index, ratings; ylabel = "Final rating", ticks...)
+    percent_plot = plot(runs_index, [run.solved_percent for run in runs]; ylabel = "Solved %", ticks...)
+    time_plot = plot(runs_index, [run.seconds for run in runs]; ylabel = "Seconds", ticks...)
+    latest = runs[end]
+    band_labels = ["$(row.band)-$(row.band + 99)" for row in latest.bands]
+    band_plot = bar(band_labels, [row.solved_percent for row in latest.bands]; legend = false, ylabel = "Solved %", title = "Latest run", xrotation = 60, bottom_margin = 14Plots.mm, xtickfontsize = 7)
+    figure = plot(rating_plot, percent_plot, time_plot, band_plot, layout = (4, 1), size = (900, 1400), plot_title = "Benchmark history")
+    savefig(figure, path)
+end
+
+
+function ensure_note_column(path)
+    isfile(path) || return
+    lines = readlines(path)
+    isempty(lines) && return
+    startswith(lines[1], HISTORY_HEADER) && return
     open(path, "w") do io
-        println(io, """
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <meta charset="utf-8">
-        <title>Benchmark history</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6"></script>
-        <style>
-        body { background: #ffffff; color: #111111; font-family: ui-sans-serif, system-ui, sans-serif; margin: 24px; max-width: 860px; }
-        canvas { margin: 24px 0; }
-        table { border-collapse: collapse; }
-        th, td { border-bottom: 1px solid #ddd; padding: 6px 10px; text-align: right; }
-        th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
-        </style>
-        </head>
-        <body>
-        <h1>Benchmark history</h1>
-        <p id="count"></p>
-        <h2>Final rating</h2><canvas id="rating"></canvas>
-        <h2>Solved percent</h2><canvas id="percent"></canvas>
-        <h2>Seconds</h2><canvas id="seconds"></canvas>
-        <h2>Latest run by rating band</h2><canvas id="bands"></canvas>
-        <table id="history"></table>
-        <script>
-        const runs = $(runs_json(runs));
-        const labels = runs.map(run => run.ran_at);
-        document.getElementById("count").textContent = runs.length + " runs";
-        function line(id, data) {
-            new Chart(document.getElementById(id), {
-                type: "line",
-                data: { labels, datasets: [{ data, borderColor: "#3b6ea5", tension: 0.2 }] },
-                options: { plugins: { legend: { display: false } } }
-            });
-        }
-        line("rating", runs.map(run => run.final_rating));
-        line("percent", runs.map(run => run.solved_percent));
-        line("seconds", runs.map(run => run.seconds));
-        const latest = runs[runs.length - 1];
-        if (latest) {
-            new Chart(document.getElementById("bands"), {
-                type: "bar",
-                data: {
-                    labels: latest.bands.map(row => row.band + "-" + (row.band + 99)),
-                    datasets: [{ data: latest.bands.map(row => row.solved_percent), backgroundColor: "#3b6ea5" }]
-                },
-                options: { indexAxis: "y", plugins: { legend: { display: false } } }
-            });
-        }
-        const table = document.getElementById("history");
-        table.innerHTML = "<tr><th>Ran at</th><th>Engine</th><th>Depth</th><th>Seconds</th><th>Solved</th><th>Failed</th><th>Solved %</th><th>Final rating</th><th>Highest solved</th><th>Lowest missed</th></tr>";
-        for (const run of runs) {
-            const cells = [run.ran_at, run.engine, run.depth, run.seconds, run.solved + "/" + run.puzzles, run.failed, run.solved_percent, run.final_rating ?? "", run.highest_solved ?? "", run.lowest_missed ?? ""];
-            table.insertAdjacentHTML("beforeend", "<tr>" + cells.map(cell => "<td>" + cell + "</td>").join("") + "</tr>");
-        }
-        </script>
-        </body>
-        </html>
-        """)
+        println(io, HISTORY_HEADER)
+        for line in lines[2:end]
+            line == "" && continue
+            println(io, line * ",\"\"")
+        end
     end
 end
 
-function save_benchmark_history(results, depth::Int, seconds::Float64, ran_at::AbstractString, engine::AbstractString = "minimax")
+function save_benchmark_history(results, depth::Int, seconds::Float64, ran_at::AbstractString, note::AbstractString, engine::AbstractString = "minimax")
+    ensure_note_column(HISTORY_PATH)
     summary = benchmark_summary(results)
     bands = rating_bands(results)
-    line = history_line(ran_at, engine, depth, seconds, results, summary, bands)
+    line = history_line(ran_at, engine, depth, seconds, results, summary, bands, note)
     append_history_line(HISTORY_PATH, line)
     write_benchmark_graph(GRAPH_PATH, read_history(HISTORY_PATH))
-    return (; summary, bands)
+end
+
+function ask_yes_no(prompt)
+    while true
+        print(prompt, " [y/n] ")
+        answer = readline()
+        if eof(stdin) && strip(answer) == ""
+            println()
+            return false
+        end
+        answer = lowercase(strip(answer))
+        if answer == "y" || answer == "yes"
+            return true
+        elseif answer == "n" || answer == "no"
+            return false
+        end
+        println("Please type y or n.")
+    end
 end
 
 function main()
@@ -320,7 +298,16 @@ function main()
     println("Ran: $ran_at")
     @printf("Elapsed: %.3f seconds\n", elapsed)
 
-    save_benchmark_history(results, SEARCH_DEPTH, elapsed, ran_at)
+    if !ask_yes_no("Save this run?")
+        println("Not saved.")
+        return
+    end
+    note = ""
+    if ask_yes_no("Add a note?")
+        print("Note: ")
+        note = strip(readline())
+    end
+    save_benchmark_history(results, SEARCH_DEPTH, elapsed, ran_at, note)
     println("History: $(abspath(HISTORY_PATH))")
     println("Graph: $(abspath(GRAPH_PATH))")
 end
