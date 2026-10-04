@@ -2,6 +2,7 @@
 using Chess
 include(joinpath(@__DIR__, "move_ordering.jl"))
 include(joinpath(@__DIR__, "transposition.jl"))
+include(joinpath(@__DIR__, "evaluation.jl"))
 
 const CHECKMATE_SCORE = 99999
 
@@ -45,6 +46,7 @@ function minimax(
     ply::Int = 0,
     history::Union{Nothing,Vector{UInt64}} = nothing,
     table::Union{Nothing,TranspositionTable} = nothing,
+    score::Union{Nothing,Int} = nothing,
 )
     path = history === nothing ? UInt64[] : history
     if ischeckmate(position)
@@ -67,12 +69,13 @@ function minimax(
         beta = probed.beta
     end
 
+    current = score === nothing ? material_score(position) : score
     if depth == 0 || isterminal(position)
-        score = evaluate(position)
+        leaf = isterminal(position) ? 0 : current
         if table !== nothing
-            store!(table, position.key, depth, pack_score(score, ply), EXACT, MOVE_NULL)
+            store!(table, position.key, depth, pack_score(leaf, ply), EXACT, MOVE_NULL)
         end
-        return score
+        return leaf
     end
 
     push!(path, position.key)
@@ -81,7 +84,8 @@ function minimax(
             max_evaluation = -Inf
             best_move = MOVE_NULL
             for child in ordered_moves(position, hash_move)
-                evaluation = minimax(domove(position, child), depth - 1, false, alpha, beta, ply + 1, path, table)
+                child_score = update_score(position, child, current)
+                evaluation = minimax(domove(position, child), depth - 1, false, alpha, beta, ply + 1, path, table, child_score)
                 if evaluation > max_evaluation
                     max_evaluation = evaluation
                     best_move = child
@@ -104,7 +108,8 @@ function minimax(
             min_evaluation = Inf
             best_move = MOVE_NULL
             for child in ordered_moves(position, hash_move)
-                evaluation = minimax(domove(position, child), depth - 1, true, alpha, beta, ply + 1, path, table)
+                child_score = update_score(position, child, current)
+                evaluation = minimax(domove(position, child), depth - 1, true, alpha, beta, ply + 1, path, table, child_score)
                 if evaluation < min_evaluation
                     min_evaluation = evaluation
                     best_move = child
@@ -129,48 +134,6 @@ function minimax(
     end
 end
 
-function evaluate(position)
-    if ischeckmate(position) && sidetomove(position) == BLACK
-        return CHECKMATE_SCORE
-    elseif ischeckmate(position) && sidetomove(position) == WHITE
-        return -CHECKMATE_SCORE
-    elseif isterminal(position)
-        return 0
-    end
-
-    white_score = 0
-    black_score = 0
-
-    for sq in occupiedsquares(position)
-        piece = pieceon(position, sq)
-        piecetype = ptype(piece)
-        value = get_piece_value(piecetype)
-
-        if pcolor(piece) == WHITE
-            white_score += value
-        else
-            black_score += value
-        end
-    end
-
-    return white_score - black_score
-end
-
-function get_piece_value(pt::PieceType)
-    if pt == PAWN
-        return 1
-    elseif pt == KNIGHT
-        return 3
-    elseif pt == BISHOP
-        return 3
-    elseif pt == ROOK
-        return 5
-    elseif pt == QUEEN
-        return 9
-    end
-    return 0
-end
-
 function move(
     position::Board,
     depth::Int,
@@ -190,6 +153,7 @@ function move(
     legal_moves = ordered_moves(position, probed.best_move)
     path = history === nothing ? UInt64[] : copy(history)
     push!(path, position.key)
+    current = material_score(position)
 
     #if white
     if sidetomove(position) == WHITE
@@ -200,7 +164,7 @@ function move(
 
         for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, false, alpha, beta, 1, path, table)
+            evaluation = minimax(new_position, depth - 1, false, alpha, beta, 1, path, table, update_score(position, move, current))
             if evaluation > best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)
@@ -218,7 +182,7 @@ function move(
 
         for move in legal_moves
             new_position = domove(position, move)
-            evaluation = minimax(new_position, depth - 1, true, alpha, beta, 1, path, table)
+            evaluation = minimax(new_position, depth - 1, true, alpha, beta, 1, path, table, update_score(position, move, current))
             if evaluation < best_eval
                 best_eval = evaluation
                 best_move = lastmove(new_position)

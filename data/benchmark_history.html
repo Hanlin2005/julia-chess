@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Benchmark history</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6"></script>
+<style>
+body { background: #ffffff; color: #111111; font-family: ui-sans-serif, system-ui, sans-serif; margin: 24px; max-width: 860px; }
+canvas { margin: 24px 0; }
+table { border-collapse: collapse; }
+th, td { border-bottom: 1px solid #ddd; padding: 6px 10px; text-align: right; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+</style>
+</head>
+<body>
+<h1>Benchmark history</h1>
+<p id="count"></p>
+<h2>Final rating</h2><canvas id="rating"></canvas>
+<h2>Solved percent</h2><canvas id="percent"></canvas>
+<h2>Seconds</h2><canvas id="seconds"></canvas>
+<h2>Latest run by rating band</h2><canvas id="bands"></canvas>
+<table id="history"></table>
+<script>
+const runs = [{"ran_at":"2026-10-04 03:52:47","engine":"minimax","depth":8,"seconds":356.415,"puzzles":153,"solved":129,"failed":24,"solved_percent":84.3,"final_rating":969,"highest_solved":3319,"lowest_missed":972,"bands":[{"band":300,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":400,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":500,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":600,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":700,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":800,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":900,"solved":4,"total":5,"solved_percent":80.0,"failed_percent":20.0},{"band":1000,"solved":4,"total":5,"solved_percent":80.0,"failed_percent":20.0},{"band":1100,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":1200,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":1300,"solved":4,"total":5,"solved_percent":80.0,"failed_percent":20.0},{"band":1400,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":1500,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":1600,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":1700,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":1800,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":1900,"solved":4,"total":5,"solved_percent":80.0,"failed_percent":20.0},{"band":2000,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":2100,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":2200,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":2300,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":2400,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":2500,"solved":5,"total":5,"solved_percent":100.0,"failed_percent":0.0},{"band":2600,"solved":4,"total":5,"solved_percent":80.0,"failed_percent":20.0},{"band":2700,"solved":3,"total":5,"solved_percent":60.0,"failed_percent":40.0},{"band":2800,"solved":4,"total":5,"solved_percent":80.0,"failed_percent":20.0},{"band":2900,"solved":1,"total":5,"solved_percent":20.0,"failed_percent":80.0},{"band":3000,"solved":2,"total":5,"solved_percent":40.0,"failed_percent":60.0},{"band":3100,"solved":1,"total":5,"solved_percent":20.0,"failed_percent":80.0},{"band":3200,"solved":2,"total":5,"solved_percent":40.0,"failed_percent":60.0},{"band":3300,"solved":1,"total":3,"solved_percent":33.3,"failed_percent":66.7}]}];
+const labels = runs.map(run => run.ran_at);
+document.getElementById("count").textContent = runs.length + " runs";
+function line(id, data) {
+    new Chart(document.getElementById(id), {
+        type: "line",
+        data: { labels, datasets: [{ data, borderColor: "#3b6ea5", tension: 0.2 }] },
+        options: { plugins: { legend: { display: false } } }
+    });
+}
+line("rating", runs.map(run => run.final_rating));
+line("percent", runs.map(run => run.solved_percent));
+line("seconds", runs.map(run => run.seconds));
+const latest = runs[runs.length - 1];
+if (latest) {
+    new Chart(document.getElementById("bands"), {
+        type: "bar",
+        data: {
+            labels: latest.bands.map(row => row.band + "-" + (row.band + 99)),
+            datasets: [{ data: latest.bands.map(row => row.solved_percent), backgroundColor: "#3b6ea5" }]
+        },
+        options: { indexAxis: "y", plugins: { legend: { display: false } } }
+    });
+}
+const table = document.getElementById("history");
+table.innerHTML = "<tr><th>Ran at</th><th>Engine</th><th>Depth</th><th>Seconds</th><th>Solved</th><th>Failed</th><th>Solved %</th><th>Final rating</th><th>Highest solved</th><th>Lowest missed</th></tr>";
+for (const run of runs) {
+    const cells = [run.ran_at, run.engine, run.depth, run.seconds, run.solved + "/" + run.puzzles, run.failed, run.solved_percent, run.final_rating ?? "", run.highest_solved ?? "", run.lowest_missed ?? ""];
+    table.insertAdjacentHTML("beforeend", "<tr>" + cells.map(cell => "<td>" + cell + "</td>").join("") + "</tr>");
+}
+</script>
+</body>
+</html>
+
