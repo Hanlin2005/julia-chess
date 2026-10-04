@@ -80,8 +80,8 @@ end
 
     @test choose_move(MinimaxSearch(1), search_board, 0.0) in moves(search_board)
 
-    order_board = fromfen("4k3/8/7q/6P1/8/8/8/4K2Q w - - 0 1")
-    @test tostring(ordered_moves(order_board)[1]) == "g5h6"
+    order_board = fromfen("3rk3/8/8/3n4/3pP3/8/8/3QK3 w - - 0 1")
+    @test tostring(ordered_moves(order_board)[1]) == "e4d5"
     before = fen(order_board)
     move(order_board, 2)
     @test fen(order_board) == before
