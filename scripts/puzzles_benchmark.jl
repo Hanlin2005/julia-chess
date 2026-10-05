@@ -192,6 +192,8 @@ function read_history(path)
 end
 
 function write_benchmark_graph(path, runs)
+    # GR opens a window on macOS unless this is set before Plots loads.
+    ENV["GKSwstype"] = "nul"
     @eval using Plots
     Base.invokelatest(draw_benchmark_graph, path, runs)
 end
